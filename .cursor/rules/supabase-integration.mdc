@@ -1,0 +1,100 @@
+# Supabase 연동 및 크롤러 가이드
+
+## 프로젝트 구조
+
+### 백엔드 구조
+- [apps/backend/app/db/supabase_client.py](mdc:apps/backend/app/db/supabase_client.py) - Supabase 클라이언트 설정
+- [apps/backend/app/models/article.py](mdc:apps/backend/app/models/article.py) - 기사 데이터 모델
+- [apps/backend/app/services/article_service.py](mdc:apps/backend/app/services/article_service.py) - 기사 저장 서비스
+- [apps/backend/crawler/crawler_chosun.py](mdc:apps/backend/crawler/crawler_chosun.py) - 조선일보 크롤러
+
+### 데이터베이스 스키마
+- [apps/backend/supabase/schema.sql](mdc:apps/backend/supabase/schema.sql) - 테이블 구조 정의
+
+## 주요 기능
+
+### 1. 크롤러 기능
+- 조선일보 카테고리별 기사 크롤링 (경제, 정치, 사회, 문화, 국제, 스포츠)
+- 각 카테고리당 30개 기사 수집
+- 중복 제목 방지 및 URL 정규화
+- 더보기 버튼 자동 클릭으로 충분한 기사 확보
+
+### 2. 데이터 저장
+- 파일 저장: JSONL 형식으로 로컬 저장
+- 데이터베이스 저장: Supabase articles 테이블에 저장
+- 중복 URL 체크로 중복 기사 방지
+
+### 3. 기사 데이터 구조
+```python
+Article(
+    title: str,           # 기사 제목
+    url: str,             # 기사 URL (프론트엔드 링크용)
+    category: str,        # 카테고리
+    content_full: str,    # 기사 본문 전체
+    published_at: datetime, # 발행일
+    author: str,          # 작성자
+    image_url: str,       # 이미지 URL
+    bias: str             # 편향성 (기본값: "center")
+)
+```
+
+## 환경 설정
+
+### 필수 환경변수
+```bash
+SUPABASE_URL=your_supabase_url_here
+SUPABASE_ANON_KEY=your_supabase_anon_key_here
+```
+
+### 의존성 설치
+```bash
+cd apps/backend
+python3 -m pip install supabase python-dotenv
+```
+
+## 실행 방법
+
+### 크롤러 실행
+```bash
+cd apps/backend
+python3 crawler/crawler_chosun.py
+```
+
+### 테스트 모드
+- 국제/스포츠 카테고리 제외
+- 경제, 정치, 사회, 문화 카테고리만 크롤링
+
+## 데이터베이스 테이블 구조
+
+### articles 테이블
+- `id`: UUID (Primary Key)
+- `issue_id`: UUID (Foreign Key)
+- `media_id`: UUID (Foreign Key)
+- `title`: TEXT (기사 제목)
+- `content_full`: TEXT (기사 본문 전체)
+- `url`: TEXT (기사 URL)
+- `bias`: TEXT (편향성)
+- `category`: TEXT (카테고리)
+- `published_at`: TIMESTAMP (발행일)
+- `author`: TEXT (작성자)
+- `image_url`: TEXT (이미지 URL)
+
+## 개발 가이드
+
+### 새로운 크롤러 추가
+1. [apps/backend/crawler/](mdc:apps/backend/crawler/) 디렉토리에 새 크롤러 파일 생성
+2. [apps/backend/app/models/article.py](mdc:apps/backend/app/models/article.py) 모델 사용
+3. [apps/backend/app/services/article_service.py](mdc:apps/backend/app/services/article_service.py) 서비스 활용
+
+### 데이터베이스 쿼리
+- [apps/backend/app/services/article_service.py](mdc:apps/backend/app/services/article_service.py)에서 카테고리별 기사 조회
+- 중복 URL 체크 및 미디어 정보 자동 생성
+
+### 로깅
+- 상세 로그: `crawler_detailed.log` 파일
+- 콘솔 출력: 진행 상황 및 요약 정보
+- 에러 처리: 각 단계별 예외 처리
+description:
+globs:
+alwaysApply: false
+---

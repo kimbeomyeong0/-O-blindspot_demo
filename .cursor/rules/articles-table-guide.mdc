@@ -1,0 +1,198 @@
+# Articles 테이블 가이드
+
+## 테이블 개요
+
+`articles` 테이블은 크롤링된 기사들의 정보를 저장하는 핵심 테이블입니다.
+
+## 필드 상세 설명
+
+### 기본 식별자
+- **`id`**: UUID (Primary Key)
+  - 자동 생성되는 고유 식별자
+  - `gen_random_uuid()` 함수로 생성
+
+### 외래 키 관계
+- **`issue_id`**: UUID (Foreign Key)
+  - `issues` 테이블 참조
+  - 이슈와 연결되지 않은 기사는 NULL
+  - CASCADE 삭제 정책
+
+- **`media_id`**: UUID (Foreign Key)
+  - `media_outlets` 테이블 참조
+  - 미디어 정보가 없는 기사는 NULL
+  - SET NULL 삭제 정책
+
+### 기사 기본 정보
+- **`title`**: TEXT
+  - 기사 제목
+  - NOT NULL 제약 조건
+
+- **`url`**: TEXT
+  - 기사 URL
+  - UNIQUE 제약 조건 (중복 방지)
+  - 프론트엔드에서 기사로 이동하는 링크
+
+- **`content_full`**: TEXT
+  - 기사 본문 전체 텍스트
+  - 크롤링 시 추출된 전체 내용
+
+### 분류 및 메타데이터
+- **`bias`**: TEXT
+  - 성향 (left, center, right)
+  - CHECK 제약 조건으로 세 값만 허용
+  - `media_outlets` 테이블의 bias와 연관
+  - 기본값: "center"
+
+- **`category`**: TEXT
+  - 카테고리 (경제, 정치, 사회, 문화, 국제, 스포츠)
+  - 크롤링 시 설정된 카테고리
+
+### 시간 및 작성자 정보
+- **`published_at`**: TIMESTAMP
+  - 기사 발행일
+  - ISO 형식으로 저장
+  - NULL 허용 (발행일 정보 없는 경우)
+
+- **`author`**: TEXT
+  - 기사 작성자
+  - NULL 허용 (작성자 정보 없는 경우)
+
+### 미디어 정보
+- **`image_url`**: TEXT
+  - 기사 대표 이미지 URL
+  - NULL 허용 (이미지 없는 경우)
+
+## 데이터 관계
+
+### media_outlets 테이블과의 관계
+```sql
+-- articles.media_id → media_outlets.id
+-- 미디어의 bias 정보를 articles.bias에 반영
+SELECT a.title, a.bias, m.name as media_name, m.bias as media_bias
+FROM articles a
+LEFT JOIN media_outlets m ON a.media_id = m.id;
+```
+
+### issues 테이블과의 관계
+```sql
+-- articles.issue_id → issues.id
+-- 이슈별로 관련 기사들을 그룹화
+SELECT i.title as issue_title, COUNT(a.id) as article_count
+FROM issues i
+LEFT JOIN articles a ON i.id = a.issue_id
+GROUP BY i.id, i.title;
+```
+
+## 제약 조건
+
+### CHECK 제약 조건
+```sql
+-- bias 필드는 세 가지 값만 허용
+bias TEXT CHECK (bias IN ('left', 'center', 'right'))
+```
+
+### UNIQUE 제약 조건
+```sql
+-- URL 중복 방지
+url TEXT UNIQUE NOT NULL
+```
+
+### 외래 키 제약 조건
+```sql
+-- issues 테이블 참조 (CASCADE)
+issue_id UUID REFERENCES issues(id) ON DELETE CASCADE
+
+-- media_outlets 테이블 참조 (SET NULL)
+media_id UUID REFERENCES media_outlets(id) ON DELETE SET NULL
+```
+
+## 인덱스 권장사항
+
+### 성능 최적화를 위한 인덱스
+```sql
+-- 카테고리별 조회 최적화
+CREATE INDEX idx_articles_category ON articles(category);
+
+-- 성향별 조회 최적화
+CREATE INDEX idx_articles_bias ON articles(bias);
+
+-- 발행일 기준 정렬 최적화
+CREATE INDEX idx_articles_published_at ON articles(published_at);
+
+-- 미디어별 조회 최적화
+CREATE INDEX idx_articles_media_id ON articles(media_id);
+
+-- URL 중복 체크 최적화
+CREATE INDEX idx_articles_url ON articles(url);
+```
+
+## 데이터 저장 패턴
+
+### 크롤링 데이터 저장
+1. **중복 체크**: URL 기반으로 기존 기사 확인
+2. **미디어 정보**: 조선일보 미디어 ID 자동 연결
+3. **데이터 변환**: Article 모델을 딕셔너리로 변환
+4. **일괄 삽입**: 중복되지 않은 기사들만 저장
+
+### 기본값 설정
+- `bias`: "center" (기본값)
+- `id`: UUID 자동 생성
+- `published_at`: NULL (정보 없는 경우)
+
+## 쿼리 예시
+
+### 카테고리별 기사 조회
+```sql
+SELECT title, url, published_at, author
+FROM articles
+WHERE category = '경제'
+ORDER BY published_at DESC
+LIMIT 30;
+```
+
+### 성향별 기사 수 통계
+```sql
+SELECT bias, COUNT(*) as count
+FROM articles
+GROUP BY bias
+ORDER BY count DESC;
+```
+
+### 미디어별 기사 조회
+```sql
+SELECT a.title, a.url, m.name as media_name
+FROM articles a
+JOIN media_outlets m ON a.media_id = m.id
+WHERE m.name = '조선일보';
+```
+
+### 최근 기사 조회
+```sql
+SELECT title, url, category, published_at
+FROM articles
+WHERE published_at IS NOT NULL
+ORDER BY published_at DESC
+LIMIT 10;
+```
+
+## 데이터 무결성
+
+### NULL 허용 필드
+- `issue_id`: 이슈와 연결되지 않은 기사
+- `media_id`: 미디어 정보가 없는 기사
+- `content_full`: 본문 추출 실패한 기사
+- `published_at`: 발행일 정보 없는 기사
+- `author`: 작성자 정보 없는 기사
+- `image_url`: 이미지 없는 기사
+
+### 필수 필드
+- `title`: 기사 제목 (NOT NULL)
+- `url`: 기사 URL (NOT NULL, UNIQUE)
+- `bias`: 성향 (NOT NULL, CHECK 제약)
+
+### 자동 생성 필드
+- `id`: UUID 자동 생성
+description:
+globs:
+alwaysApply: false
+---

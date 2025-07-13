@@ -1,0 +1,238 @@
+# 필드 매핑 가이드
+
+## Articles 테이블 ↔ Article 모델 매핑
+
+### 데이터베이스 테이블 구조
+```sql
+CREATE TABLE articles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  issue_id UUID REFERENCES issues(id) ON DELETE CASCADE,
+  media_id UUID REFERENCES media_outlets(id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  content_full TEXT,
+  url TEXT UNIQUE NOT NULL,
+  bias TEXT CHECK (bias IN ('left', 'center', 'right')) NOT NULL,
+  category TEXT,
+  published_at TIMESTAMP,
+  author TEXT,
+  image_url TEXT
+);
+```
+
+### Python Article 모델
+```python
+@dataclass
+class Article:
+    title: str                    # 기사 제목
+    url: str                      # 기사 URL
+    category: str                 # 카테고리
+    content_full: Optional[str]   # 기사 본문 전체
+    published_at: Optional[datetime] # 발행일
+    author: Optional[str]         # 작성자
+    image_url: Optional[str]      # 이미지 URL
+    bias: str = "center"          # 성향 (기본값: center)
+```
+
+## 필드별 상세 매핑
+
+### 1. 기본 정보 필드
+| 데이터베이스 | Python 모델 | 설명 | 제약 조건 |
+|-------------|-------------|------|-----------|
+| `title` | `title: str` | 기사 제목 | NOT NULL |
+| `url` | `url: str` | 기사 URL | UNIQUE, NOT NULL |
+| `category` | `category: str` | 카테고리 | - |
+
+### 2. 내용 필드
+| 데이터베이스 | Python 모델 | 설명 | 제약 조건 |
+|-------------|-------------|------|-----------|
+| `content_full` | `content_full: Optional[str]` | 기사 본문 전체 | NULL 허용 |
+
+### 3. 메타데이터 필드
+| 데이터베이스 | Python 모델 | 설명 | 제약 조건 |
+|-------------|-------------|------|-----------|
+| `bias` | `bias: str = "center"` | 성향 (left, center, right) | CHECK 제약 |
+| `published_at` | `published_at: Optional[datetime]` | 발행일 | NULL 허용 |
+| `author` | `author: Optional[str]` | 작성자 | NULL 허용 |
+| `image_url` | `image_url: Optional[str]` | 이미지 URL | NULL 허용 |
+
+### 4. 관계 필드 (자동 처리)
+| 데이터베이스 | Python 모델 | 설명 | 처리 방식 |
+|-------------|-------------|------|-----------|
+| `id` | - | UUID (Primary Key) | 자동 생성 |
+| `issue_id` | - | issues 테이블 참조 | 나중에 연결 |
+| `media_id` | - | media_outlets 테이블 참조 | 자동 연결 |
+
+## 데이터 변환 프로세스
+
+### 크롤링 데이터 → Article 모델
+```python
+# 크롤링된 딕셔너리 데이터
+article_dict = {
+    "title": "기사 제목",
+    "url": "https://www.chosun.com/article/...",
+    "content_full": "기사 본문 전체...",
+    "published_at": "2024-01-15T10:30:00Z",
+    "author": "기자명",
+    "image_url": "https://image.chosun.com/...",
+    "category": "경제"
+}
+
+# Article 모델로 변환
+article_model = Article(
+    title=article_dict['title'],
+    url=article_dict['url'],
+    category=article_dict['category'],
+    content_full=article_dict.get('content_full'),
+    published_at=datetime.fromisoformat(article_dict['published_at']),
+    author=article_dict.get('author'),
+    image_url=article_dict.get('image_url'),
+    bias="center"  # 기본값
+)
+```
+
+### Article 모델 → 데이터베이스 딕셔너리
+```python
+# Article 모델을 딕셔너리로 변환
+article_dict = article_model.to_dict()
+# {
+#     "title": "기사 제목",
+#     "url": "https://www.chosun.com/article/...",
+#     "category": "경제",
+#     "content_full": "기사 본문 전체...",
+#     "published_at": "2024-01-15T10:30:00Z",
+#     "author": "기자명",
+#     "image_url": "https://image.chosun.com/...",
+#     "bias": "center"
+# }
+
+# 미디어 ID 추가
+article_dict["media_id"] = media_id
+```
+
+## 데이터 타입 변환
+
+### 날짜/시간 변환
+```python
+# ISO 문자열 → datetime 객체
+if article_dict.get('published_at'):
+    try:
+        if isinstance(article_dict['published_at'], str):
+            published_at = datetime.fromisoformat(
+                article_dict['published_at'].replace('Z', '+00:00')
+            )
+        else:
+            published_at = article_dict['published_at']
+    except:
+        published_at = None
+
+# datetime 객체 → ISO 문자열
+"published_at": self.published_at.isoformat() if self.published_at else None
+```
+
+### NULL 값 처리
+```python
+# Python None → SQL NULL
+# Optional 필드들은 None일 때 NULL로 저장
+content_full=article_dict.get('content_full'),  # None이면 NULL
+author=article_dict.get('author'),              # None이면 NULL
+image_url=article_dict.get('image_url'),        # None이면 NULL
+```
+
+## 제약 조건 검증
+
+### UNIQUE 제약 조건
+```python
+# URL 중복 체크
+existing_articles = client.table("articles").select("url").in_("url", urls).execute()
+existing_urls = {row["url"] for row in existing_articles.data}
+new_articles = [article for article in articles if article.url not in existing_urls]
+```
+
+### CHECK 제약 조건
+```python
+# bias 값 검증
+valid_bias_values = ['left', 'center', 'right']
+if bias not in valid_bias_values:
+    bias = "center"  # 기본값으로 설정
+```
+
+### NOT NULL 제약 조건
+```python
+# 필수 필드 검증
+if not title or not url or not category:
+    raise ValueError("필수 필드가 누락되었습니다: title, url, category")
+```
+
+## 관계 처리
+
+### 미디어 정보 자동 연결
+```python
+# 조선일보 미디어 ID 가져오기 (없으면 생성)
+async def _get_or_create_chosun_media(self) -> str:
+    result = self.client.table("media_outlets").select("id").eq("name", "조선일보").execute()
+    
+    if result.data:
+        return result.data[0]["id"]
+    
+    # 없으면 생성
+    media_data = {
+        "name": "조선일보",
+        "bias": "center",
+        "logo_url": "https://www.chosun.com/favicon.ico"
+    }
+    
+    result = self.client.table("media_outlets").insert(media_data).execute()
+    return result.data[0]["id"]
+```
+
+### 이슈 연결 (향후 구현)
+```python
+# issue_id는 나중에 이슈 생성 시 연결
+# 현재는 NULL로 저장
+article_dict["issue_id"] = None
+```
+
+## 에러 처리
+
+### 데이터 변환 에러
+```python
+try:
+    published_at = datetime.fromisoformat(article_dict['published_at'])
+except (ValueError, TypeError):
+    published_at = None
+    logger.warning(f"발행일 파싱 실패: {article_dict.get('published_at')}")
+```
+
+### 제약 조건 위반
+```python
+try:
+    result = self.client.table("articles").insert(articles_data).execute()
+except Exception as e:
+    logger.error(f"데이터베이스 저장 실패: {e}")
+    # 제약 조건 위반 시 개별 처리
+    for article in articles_data:
+        try:
+            self.client.table("articles").insert(article).execute()
+        except Exception as e:
+            logger.error(f"개별 기사 저장 실패: {article.get('title')} - {e}")
+```
+
+## 성능 최적화
+
+### 일괄 삽입
+```python
+# 여러 기사를 한 번에 삽입
+result = self.client.table("articles").insert(articles_data).execute()
+saved_count = len(result.data) if result.data else 0
+```
+
+### 중복 체크 최적화
+```python
+# URL 목록으로 한 번에 중복 체크
+urls = [article.url for article in articles]
+existing_articles = self.client.table("articles").select("url").in_("url", urls).execute()
+```
+description:
+globs:
+alwaysApply: false
+---

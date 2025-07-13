@@ -1,0 +1,181 @@
+# 데이터베이스 스키마 가이드
+
+## 테이블 구조
+
+### articles 테이블
+```sql
+CREATE TABLE IF NOT EXISTS articles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  issue_id UUID REFERENCES issues(id) ON DELETE CASCADE,
+  media_id UUID REFERENCES media_outlets(id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  content_full TEXT,
+  url TEXT UNIQUE NOT NULL,
+  bias TEXT CHECK (bias IN ('left', 'center', 'right')) NOT NULL,
+  category TEXT,
+  published_at TIMESTAMP,
+  author TEXT,
+  image_url TEXT
+);
+```
+
+### media_outlets 테이블
+```sql
+CREATE TABLE IF NOT EXISTS media_outlets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  bias TEXT CHECK (bias IN ('left', 'center', 'right')) NOT NULL,
+  logo_url TEXT
+);
+```
+
+### issues 테이블
+```sql
+CREATE TABLE IF NOT EXISTS issues (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  image_url TEXT,
+  image_swipe_url TEXT,
+  bias_left_pct FLOAT DEFAULT 0,
+  bias_center_pct FLOAT DEFAULT 0,
+  bias_right_pct FLOAT DEFAULT 0,
+  dominant_bias TEXT CHECK (dominant_bias IN ('left', 'center', 'right')),
+  source_count INTEGER DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT now()
+);
+```
+
+## 데이터 모델
+
+### Article 모델
+```python
+@dataclass
+class Article:
+    title: str                    # 기사 제목 (필수)
+    url: str                      # 기사 URL (필수, 프론트엔드 링크용)
+    category: str                 # 카테고리 (필수)
+    content_full: Optional[str]   # 기사 본문 전체
+    published_at: Optional[datetime] # 발행일
+    author: Optional[str]         # 작성자
+    image_url: Optional[str]      # 이미지 URL
+    bias: str = "center"          # 편향성 (기본값: center)
+```
+
+### 필드 설명
+- `id`: UUID (Primary Key, 자동 생성)
+- `issue_id`: UUID (Foreign Key, issues 테이블 참조)
+- `media_id`: UUID (Foreign Key, media_outlets 테이블 참조)
+- `title`: 기사 제목
+- `content_full`: 기사 본문 전체 텍스트
+- `url`: 기사 URL (UNIQUE, 프론트엔드에서 기사로 이동)
+- `bias`: 성향 (left, center, right) - media_outlets 테이블의 bias와 연관
+- `category`: 카테고리 (경제, 정치, 사회, 문화, 국제, 스포츠)
+- `published_at`: 발행일 (TIMESTAMP)
+- `author`: 작성자 정보
+- `image_url`: 기사 대표 이미지 URL
+
+## 관계 설정
+
+### 외래 키 관계
+- `articles.issue_id` → `issues.id` (CASCADE)
+- `articles.media_id` → `media_outlets.id` (SET NULL)
+
+### 미디어 정보 자동 생성
+- 조선일보 미디어 정보가 없으면 자동 생성
+- 기본 편향성: "center"
+- 로고 URL: 조선일보 favicon
+
+## 데이터 저장 프로세스
+
+### 1. 중복 체크
+```python
+# URL 기반 중복 체크
+existing_articles = client.table("articles").select("url").in_("url", urls).execute()
+existing_urls = {row["url"] for row in existing_articles.data}
+```
+
+### 2. 미디어 정보 처리
+```python
+# 조선일보 미디어 ID 가져오기 (없으면 생성)
+media_id = await self._get_or_create_chosun_media()
+```
+
+### 3. 데이터 변환
+```python
+# Article 모델을 딕셔너리로 변환
+article_dict = article.to_dict()
+article_dict["media_id"] = media_id
+```
+
+## 쿼리 패턴
+
+### 카테고리별 기사 조회
+```python
+result = client.table("articles").select("*").eq("category", category).limit(limit).execute()
+```
+
+### 전체 기사 수 조회
+```python
+result = client.table("articles").select("id").execute()
+count = len(result.data) if result.data else 0
+```
+
+### 중복 URL 체크
+```python
+result = client.table("articles").select("url").in_("url", urls).execute()
+```
+
+## 제약 조건
+
+### CHECK 제약 조건
+- `bias`: 'left', 'center', 'right' 중 하나만 허용
+- `dominant_bias`: 'left', 'center', 'right' 중 하나만 허용
+
+### UNIQUE 제약 조건
+- `articles.url`: URL 중복 방지
+- `bookmarks(user_id, issue_id)`: 사용자별 북마크 중복 방지
+
+### 외래 키 제약 조건
+- `articles.issue_id`: issues 테이블 참조 (CASCADE)
+- `articles.media_id`: media_outlets 테이블 참조 (SET NULL)
+
+## 인덱스 권장사항
+
+### 성능 최적화를 위한 인덱스
+```sql
+-- 카테고리별 조회 최적화
+CREATE INDEX idx_articles_category ON articles(category);
+
+-- 발행일 기준 정렬 최적화
+CREATE INDEX idx_articles_published_at ON articles(published_at);
+
+-- 미디어별 조회 최적화
+CREATE INDEX idx_articles_media_id ON articles(media_id);
+
+-- 편향성별 조회 최적화
+CREATE INDEX idx_articles_bias ON articles(bias);
+```
+
+## 데이터 무결성
+
+### 자동 생성 필드
+- `id`: UUID 자동 생성
+- `updated_at`: 타임스탬프 자동 업데이트
+
+### 기본값 설정
+- `bias`: "center" (기본값)
+- `bias_left_pct`, `bias_center_pct`, `bias_right_pct`: 0 (기본값)
+- `source_count`: 0 (기본값)
+
+### NULL 허용 필드
+- `issue_id`: 이슈와 연결되지 않은 기사
+- `media_id`: 미디어 정보가 없는 기사
+- `content_full`: 본문 추출 실패한 기사
+- `published_at`: 발행일 정보 없는 기사
+- `author`: 작성자 정보 없는 기사
+- `image_url`: 이미지 없는 기사
+description:
+globs:
+alwaysApply: false
+---

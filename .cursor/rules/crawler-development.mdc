@@ -1,0 +1,126 @@
+# 크롤러 개발 가이드
+
+## 크롤러 구조
+
+### 핵심 클래스
+- `ChosunCrawler`: 메인 크롤러 클래스
+- `ArticleExtractor`: 기사 내용 추출 클래스
+- `ConsoleUI`: 터미널 UI 관리 클래스
+- `CrawlerConfig`: 크롤러 설정 클래스
+
+### 카테고리 정의
+```python
+class Category(Enum):
+    ECONOMY = "경제"
+    POLITICS = "정치"
+    NATIONAL = "사회"
+    CULTURE = "문화"
+    INTERNATIONAL = "국제"
+    SPORTS = "스포츠"
+```
+
+## 크롤링 프로세스
+
+### 1. 페이지 로딩
+- Playwright를 사용한 헤드리스 브라우저
+- 모바일 버전으로 접근 (더 안정적)
+- 타임아웃 및 대기 시간 설정
+
+### 2. 더보기 버튼 클릭
+- `#load-more-stories` 셀렉터로 더보기 버튼 찾기
+- 목표 기사 수에 도달할 때까지 반복 클릭
+- 네트워크 대기 및 로딩 상태 확인
+
+### 3. 기사 링크 추출
+- `a.story-card__headline` 셀렉터로 기사 링크 찾기
+- 정규표현식으로 실제 기사 URL만 필터링
+- URL 정규화 (쿼리 파라미터 제거)
+
+### 4. 기사 내용 추출
+- 각 기사 페이지 방문
+- 제목, 본문, 메타데이터 추출
+- 중복 제목 체크 및 필터링
+
+## CSS 셀렉터 설정
+
+### 기본 셀렉터
+```python
+headline_selector: str = 'a.story-card__headline'
+title_selectors: List[str] = ['h1', '.article-title', '.story-title']
+content_selectors: List[str] = ['.article-body', '.news-article-body', '.story-content']
+date_selectors: List[str] = ["meta[property='article:published_time']", "time"]
+author_selectors: List[str] = ["meta[property='og:article:author']", ".author"]
+image_selectors: List[str] = ["meta[property='og:image']", ".article-image img"]
+```
+
+### 셀렉터 우선순위
+1. 메타 태그 (가장 안정적)
+2. 시맨틱 HTML 요소
+3. 클래스 기반 셀렉터
+
+## 에러 처리
+
+### 일반적인 문제들
+- "Target page, context or browser has been closed"
+- 더보기 버튼 클릭 실패
+- 기사 추출 실패
+- 네트워크 타임아웃
+
+### 해결 방법
+- 브라우저/페이지 재생성
+- 대기 시간 증가
+- 셀렉터 개선
+- 예외 처리 강화
+
+## 성능 최적화
+
+### 비동기 처리
+- `async/await` 패턴 사용
+- 동시 요청 제한
+- 메모리 관리
+
+### 중복 방지
+- 제목 기반 중복 체크
+- URL 정규화
+- Set 자료구조 활용
+
+## 로깅 및 모니터링
+
+### 로그 레벨
+- DEBUG: 상세 디버깅 정보
+- INFO: 진행 상황
+- ERROR: 에러 및 예외
+
+### 출력 형식
+- 파일 로그: 상세 정보
+- 콘솔 출력: 진행 바 및 이모지
+- 진행 상황 실시간 업데이트
+
+## 테스트 및 디버깅
+
+### 테스트 모드
+- 특정 카테고리만 크롤링
+- 기사 수 제한
+- 상세 로그 활성화
+
+### 디버깅 도구
+- Playwright Inspector
+- BeautifulSoup 디버깅
+- 로그 파일 분석
+
+## 확장성
+
+### 새로운 사이트 추가
+1. URL 패턴 분석
+2. 셀렉터 설정
+3. 카테고리 매핑
+4. 테스트 및 검증
+
+### 설정 커스터마이징
+- `CrawlerConfig` 클래스 수정
+- 환경변수 활용
+- 설정 파일 분리
+description:
+globs:
+alwaysApply: false
+---
