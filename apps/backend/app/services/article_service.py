@@ -89,3 +89,17 @@ class ArticleService:
         except Exception as e:
             logger.error(f"기사 수 조회 중 오류: {e}")
             return 0 
+
+    async def get_or_create_media(self, name: str) -> Optional[dict]:
+        """언론사 이름으로 media_outlets의 id, bias를 조회(없으면 생성)"""
+        try:
+            result = self.client.table("media_outlets").select("id,bias").eq("name", name).execute()
+            if result.data:
+                return {"id": result.data[0]["id"], "bias": result.data[0]["bias"]}
+            # 없으면 생성 (bias는 right로 기본값, logo_url은 빈 문자열)
+            media_data = {"name": name, "bias": "right", "logo_url": ""}
+            result = self.client.table("media_outlets").insert(media_data).execute()
+            return {"id": result.data[0]["id"], "bias": result.data[0]["bias"]}
+        except Exception as e:
+            logger.error(f"미디어 정보 처리 중 오류: {e}")
+            return None 

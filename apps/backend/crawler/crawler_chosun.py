@@ -18,12 +18,17 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 from app.services.article_service import ArticleService
 from app.models.article import Article
+from crawler.base_crawler import BaseNewsCrawler
 
 # 로깅 설정 - 파일과 콘솔 분리
 def setup_logging():
     """로깅 설정을 초기화합니다."""
+    # 로그 디렉토리 생성
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+    
     # 파일 로거 (상세 정보)
-    file_handler = logging.FileHandler("crawler_detailed.log", encoding="utf-8")
+    file_handler = logging.FileHandler(log_dir / "crawler_detailed.log", encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
     file_formatter = logging.Formatter(
         "%(asctime)s %(name)s %(levelname)s %(message)s"
@@ -262,7 +267,7 @@ class ArticleExtractor:
                         return src
         return None
 
-class ChosunCrawler:
+class ChosunCrawler(BaseNewsCrawler):
     """조선일보 크롤러 클래스"""
     
     CATEGORY_URLS = {
@@ -499,23 +504,37 @@ class ChosunCrawler:
 async def main():
     """메인 함수"""
     try:
+        # 환경변수 체크
+        import os
+        if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_ANON_KEY"):
+            print("⚠️  경고: Supabase 환경변수가 설정되지 않았습니다.")
+            print("   apps/backend/.env 파일에 SUPABASE_URL과 SUPABASE_ANON_KEY를 설정하세요.")
+            print("   데이터베이스 저장을 건너뛰고 파일 저장만 진행합니다.")
+        
         config = CrawlerConfig()
         crawler = ChosunCrawler(config)
         
         # UI 헤더 출력
         crawler.ui.print_header()
         
-        # 테스트 모드: 국제/스포츠 제외
-        articles = await crawler.crawl_all_categories(test_mode=True)
+        # 모든 카테고리 크롤링 (6개 카테고리)
+        articles = await crawler.crawl_all_categories(test_mode=False)
         
         if articles:
             # 파일 저장
             filepath = await crawler.save_articles(articles)
             
-            # 데이터베이스 저장
-            print("\n💾 데이터베이스에 저장 중...")
-            saved_count = await crawler.save_articles_to_db(articles)
-            print(f"✅ {saved_count}개 기사가 데이터베이스에 저장되었습니다.")
+            # 데이터베이스 저장 (환경변수가 설정된 경우에만)
+            if os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_ANON_KEY"):
+                print("\n💾 데이터베이스에 저장 중...")
+                try:
+                    saved_count = await crawler.save_articles_to_db(articles)
+                    print(f"✅ {saved_count}개 기사가 데이터베이스에 저장되었습니다.")
+                except Exception as e:
+                    print(f"❌ 데이터베이스 저장 실패: {e}")
+                    print("   파일 저장은 완료되었습니다.")
+            else:
+                print("\n⚠️  데이터베이스 저장을 건너뜁니다. (환경변수 미설정)")
             
             # 최종 요약 출력
             crawler.ui.print_summary(len(articles), filepath)

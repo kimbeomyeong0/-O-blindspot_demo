@@ -51,6 +51,7 @@ Thumbs.db
 logs/
 crawler_detailed.log
 crawler.log
+apps/backend/crawler/logs/
 
 # Database
 *.db
