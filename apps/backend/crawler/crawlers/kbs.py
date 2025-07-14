@@ -15,9 +15,9 @@ from playwright.async_api import async_playwright, Browser, Page
 
 # Supabase 연동을 위한 import
 sys.path.append(str(Path(__file__).parent.parent))
-from app.services.article_service import ArticleService
-from app.models.article import Article
-from crawler.base_crawler import BaseNewsCrawler
+from apps.backend.app.services.article_service import ArticleService
+from apps.backend.app.models.article import Article
+from apps.backend.crawler.base import BaseNewsCrawler
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn

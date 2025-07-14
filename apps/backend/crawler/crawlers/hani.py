@@ -196,7 +196,18 @@ class HaniCrawler(BaseNewsCrawler):
                     article_urls = await self.fetch_article_list(browser, category, min_count=min_count, max_pages=page_try)
                     # 2. 기사 상세 파싱 (진행률/성공/실패/스킵 카운트)
                     context = await browser.new_context()
-                    page = await context.new_page()
+                    semaphore = asyncio.Semaphore(5)  # 동시에 5개까지
+                    async def parse_one(url):
+                        async with semaphore:
+                            page = await context.new_page()
+                            try:
+                                article = await self.parse_article(page, url)
+                                if article:
+                                    article['media_id'] = await self.get_media_id('한겨레신문')
+                                    article['bias'] = await self.get_media_bias('한겨레신문')
+                                return article
+                            finally:
+                                await page.close()
                     articles = []
                     success_count = 0
                     fail_count = 0
@@ -209,11 +220,10 @@ class HaniCrawler(BaseNewsCrawler):
                         console=console,
                     ) as progress:
                         task = progress.add_task(f"[cyan]{page_try}페이지까지 기사 상세 파싱 중...", total=len(article_urls))
-                        for url in article_urls:
-                            article = await self.parse_article(page, url)
+                        tasks = [parse_one(url) for url in article_urls]
+                        for f in asyncio.as_completed(tasks):
+                            article = await f
                             if article:
-                                article['media_id'] = await self.get_media_id('한겨레신문')
-                                article['bias'] = await self.get_media_bias('한겨레신문')
                                 articles.append(article)
                                 success_count += 1
                                 if len(articles) >= min_count:
@@ -221,7 +231,6 @@ class HaniCrawler(BaseNewsCrawler):
                             else:
                                 fail_count += 1
                             progress.update(task, advance=1)
-                    await page.close()
                     await context.close()
                     if len(articles) >= min_count:
                         break

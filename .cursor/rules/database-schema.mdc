@@ -1,0 +1,76 @@
+# blindspot_demo 데이터베이스 스키마
+
+## 테이블 구조
+
+### articles 테이블
+- **id**: uuid (기본키)
+- **issue_id**: uuid (issues 테이블 참조)
+- **media_id**: uuid (media_outlets 테이블 참조)
+- **title**: text (기사 제목)
+- **content_full**: text (기사 전체 내용)
+- **url**: text (기사 URL)
+- **category**: text (기사 카테고리)
+- **published_at**: timestamp with time zone (발행일시)
+- **author**: text (작성자)
+- **image_url**: text (이미지 URL)
+- **bias**: text (편향성)
+
+### issues 테이블
+- **id**: uuid (기본키)
+- **title**: text (이슈 제목)
+- **summary**: text (이슈 요약)
+- **image_url**: text (이미지 URL)
+- **image_swipe_url**: text (스와이프 이미지 URL)
+- **bias_left_pct**: double precision (좌파 편향 퍼센트)
+- **bias_center_pct**: double precision (중도 편향 퍼센트)
+- **bias_right_pct**: double precision (우파 편향 퍼센트)
+- **dominant_bias**: text (주요 편향성)
+- **source_count**: integer (소스 수)
+- **updated_at**: timestamp without time zone (업데이트 시간)
+
+### media_outlets 테이블
+- **id**: uuid (기본키)
+- **name**: text (미디어 이름)
+- **bias**: text (편향성)
+- **logo_url**: text (로고 URL)
+
+### bias_summaries 테이블
+- **id**: uuid (기본키)
+- **issue_id**: uuid (issues 테이블 참조)
+- **bias**: text (편향성)
+- **summary_list**: jsonb (요약 리스트)
+
+### common_points 테이블
+- **id**: uuid (기본키)
+- **issue_id**: uuid (issues 테이블 참조)
+- **point**: text (공통점)
+
+### bookmarks 테이블
+- **user_id**: uuid (사용자 ID)
+- **issue_id**: uuid (issues 테이블 참조)
+- **created_at**: timestamp without time zone (생성 시간)
+
+### reactions 테이블
+- **id**: uuid (기본키)
+- **issue_id**: uuid (issues 테이블 참조)
+- **likes**: integer (좋아요 수)
+- **comments**: integer (댓글 수)
+- **views**: integer (조회수)
+
+## 관계
+- articles.issue_id → issues.id
+- articles.media_id → media_outlets.id
+- bias_summaries.issue_id → issues.id
+- common_points.issue_id → issues.id
+- bookmarks.issue_id → issues.id
+- reactions.issue_id → issues.id
+
+## 주요 특징
+- 모든 테이블이 UUID 기반의 기본키를 사용
+- 대부분의 테이블이 issues 테이블을 참조하는 구조
+- 편향성(bias) 정보가 여러 테이블에 분산되어 있음
+- JSONB 타입을 사용하여 유연한 데이터 구조 지원
+description:
+globs:
+alwaysApply: false
+---

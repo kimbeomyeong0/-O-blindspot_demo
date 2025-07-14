@@ -14,11 +14,11 @@ from bs4 import BeautifulSoup, Tag
 from playwright.async_api import async_playwright, Browser, Page
 
 # Supabase 연동
-sys.path.append(str(Path(__file__).parent.parent))
-from app.services.article_service import ArticleService
-from app.models.article import Article
-from crawler.base_crawler import BaseNewsCrawler
-from crawler.utils import dict_to_article
+# sys.path.append(str(Path(__file__).parent.parent))  # 삭제
+from apps.backend.app.services.article_service import ArticleService
+from apps.backend.app.models.article import Article
+from apps.backend.crawler.base import BaseNewsCrawler
+from apps.backend.crawler.utils import dict_to_article
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
@@ -243,6 +243,23 @@ class PressianCrawler(BaseNewsCrawler):
 
     async def enrich_and_parse_details(self, browser: Browser, articles: List[dict]) -> List[dict]:
         enriched = []
+        semaphore = asyncio.Semaphore(5)  # 동시에 5개까지
+        async def parse_one(art, idx):
+            async with semaphore:
+                page = await browser.new_page()
+                try:
+                    await page.goto(art['url'], wait_until="domcontentloaded", timeout=self.config.page_timeout)
+                    await page.wait_for_timeout(self.config.wait_timeout)
+                    html = await page.content()
+                    detail = self.extractor.parse_article_detail(html)
+                    merged = {**art, **{k: v for k, v in detail.items() if v}}
+                    print_status(f"✔ {art['title'][:40]} ... 성공", "success")
+                    return merged
+                except Exception as e:
+                    print_status(f"✖ {art['title'][:40]} ... 오류: {e}", "fail")
+                    return None
+                finally:
+                    await page.close()
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -252,22 +269,12 @@ class PressianCrawler(BaseNewsCrawler):
             console=console,
         ) as progress:
             task = progress.add_task(f"상세 기사 파싱 중...", total=len(articles))
-            for i, art in enumerate(articles, 1):
-                progress.update(task, advance=1, description=f"({i}/{len(articles)}) {art['title'][:30]}")
-                page = await browser.new_page()
-                try:
-                    await page.goto(art['url'], wait_until="domcontentloaded", timeout=self.config.page_timeout)
-                    await page.wait_for_timeout(self.config.wait_timeout)
-                    html = await page.content()
-                    detail = self.extractor.parse_article_detail(html)
-                    # 필드 병합(리스트에서 추출한 값 우선, 상세에서 누락된 값 보완)
-                    merged = {**art, **{k: v for k, v in detail.items() if v}}
-                    enriched.append(merged)
-                    print_status(f"✔ {art['title'][:40]} ... 성공", "success")
-                except Exception as e:
-                    print_status(f"✖ {art['title'][:40]} ... 오류: {e}", "fail")
-                finally:
-                    await page.close()
+            tasks = [parse_one(art, i) for i, art in enumerate(articles, 1)]
+            for f in asyncio.as_completed(tasks):
+                result = await f
+                if result:
+                    enriched.append(result)
+                progress.update(task, advance=1)
         return enriched
 
     async def crawl_all_categories(self, test_mode: bool = False) -> List[Dict[str, Any]]:

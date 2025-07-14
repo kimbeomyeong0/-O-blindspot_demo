@@ -15,10 +15,10 @@ from playwright.async_api import async_playwright, Browser, Page
 
 # Supabase 연동 import
 sys.path.append(str(Path(__file__).parent.parent))
-from app.services.article_service import ArticleService
-from app.models.article import Article
-from crawler.base_crawler import BaseNewsCrawler
-from crawler.utils import dict_to_article
+from apps.backend.app.services.article_service import ArticleService
+from apps.backend.app.models.article import Article
+from apps.backend.crawler.base import BaseNewsCrawler
+from apps.backend.crawler.utils import dict_to_article
 
 # rich 스타일 터미널 피드백용 ConsoleUI
 class ConsoleUI:

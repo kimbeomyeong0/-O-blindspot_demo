@@ -1,4 +1,4 @@
-from app.models.article import Article
+from apps.backend.app.models.article import Article
 from dateutil.parser import parse as dtparse
 
 def dict_to_article(art: dict) -> Article:

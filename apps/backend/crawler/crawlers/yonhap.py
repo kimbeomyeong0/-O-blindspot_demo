@@ -18,9 +18,9 @@ from datetime import datetime
 
 # Supabase 연동 및 서비스/모델 import
 sys.path.append(str(Path(__file__).parent.parent))
-from app.services.article_service import ArticleService
-from app.models.article import Article
-from crawler.base_crawler import BaseNewsCrawler
+from apps.backend.app.services.article_service import ArticleService
+from apps.backend.app.models.article import Article
+from apps.backend.crawler.base import BaseNewsCrawler
 
 console = Console(theme=Theme({
     "success": "bold green",

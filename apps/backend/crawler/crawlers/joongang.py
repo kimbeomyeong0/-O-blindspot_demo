@@ -15,9 +15,9 @@ from playwright.async_api import async_playwright, Browser, Page
 
 # Supabase 연동 import (조선일보와 동일)
 sys.path.append(str(Path(__file__).parent.parent))
-from app.services.article_service import ArticleService
-from app.models.article import Article
-from crawler.base_crawler import BaseNewsCrawler
+from apps.backend.app.services.article_service import ArticleService
+from apps.backend.app.models.article import Article
+from apps.backend.crawler.base import BaseNewsCrawler
 
 # 로깅 설정 (조선일보와 동일)
 def setup_logging():
