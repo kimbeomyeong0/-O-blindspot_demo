@@ -1,0 +1,39 @@
+# 언론사별 media_outlets 테이블 정보 하드코딩 가이드
+
+크롤러 개발 시, 아래 media_outlets 테이블의 id, name, bias 정보를 참고하여 각 언론사별로 media_id, bias를 코드에 하드코딩할 수 있다.
+
+예시(오마이뉴스):
+- id: 149dab80-d623-49d7-a0f2-4c52329d2626
+- name: 오마이뉴스
+- bias: left
+
+전체 목록(2024-07-14 기준):
+| id                                   | name         | bias   |
+|--------------------------------------|--------------|--------|
+| 0dc0181d-414b-45cc-8d75-3ebbdf87c3f1 | JTBC 뉴스    | left   |
+| 146fa67f-856e-4347-b1c5-7e39617b9968 | 매일경제     | right  |
+| 149dab80-d623-49d7-a0f2-4c52329d2626 | 오마이뉴스   | left   |
+| 4a870e44-6fb5-467f-b236-da3687affbff | 경향신문     | left   |
+| 6e1a63ed-059b-4291-85ca-92d96a079f35 | 한겨레신문   | left   |
+| 7e183c17-5ec4-4f6c-80e6-1a736fa8e20b | 연합뉴스     | center |
+| 7e89c1b9-2724-4ec2-9e3d-52fdf89a3381 | KBS 뉴스     | center |
+| 89b042ea-a01e-496c-9386-392a634885c6 | SBS 뉴스     | center |
+| 9cee8528-5941-4047-8759-543c8ba75cc3 | 한국경제     | right  |
+| a076175c-b74e-4740-aa7d-04227fbdd44f | 동아일보     | right  |
+| cd1cc7fc-73ef-42fb-aaf7-4041dc63dc71 | YTN          | center |
+| ce65518b-8243-429e-8638-dd4fc106970d | 중앙일보     | right  |
+| ef740f3f-c9d1-4316-a679-3ab4e87971ce | 조선일보     | right  |
+| f28f48c4-ee6b-4e11-a8d5-a4673a9ba9d6 | MBC 뉴스     | center |
+| faf79a46-44c2-4140-92e8-3d91088d80b6 | 프레시안     | left   |
+
+- 크롤러에서 media_id, bias를 하드코딩할 때 위 표를 참고하여 정확히 입력할 것.
+- 오마이뉴스 크롤러 예시:
+  ```python
+  article["media_id"] = "149dab80-d623-49d7-a0f2-4c52329d2626"
+  article["bias"] = "left"
+  ```
+- 신규 언론사 추가 시, media_outlets 테이블에 먼저 등록 후 이 룰을 갱신할 것.
+description:
+globs:
+alwaysApply: false
+---

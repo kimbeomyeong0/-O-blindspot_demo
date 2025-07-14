@@ -27,16 +27,14 @@ class ArticleService:
                 logger.info("모든 기사가 이미 존재합니다.")
                 return 0
             
-            # 조선일보 미디어 ID 가져오기 (없으면 생성)
-            media_id = await self._get_or_create_chosun_media()
-            
-            # 기사 데이터 준비
+            # 기사 데이터 준비 (각 기사의 media_id, bias 사용)
             articles_data = []
             for article in new_articles:
                 article_dict = article.to_dict()
-                article_dict["media_id"] = media_id
+                # bias가 None/빈값이면 'center'로 강제
+                if not article_dict.get('bias'):
+                    article_dict['bias'] = 'center'
                 articles_data.append(article_dict)
-            
             # 일괄 삽입
             result = self.client.table("articles").insert(articles_data).execute()
             
@@ -96,8 +94,8 @@ class ArticleService:
             result = self.client.table("media_outlets").select("id,bias").eq("name", name).execute()
             if result.data:
                 return {"id": result.data[0]["id"], "bias": result.data[0]["bias"]}
-            # 없으면 생성 (bias는 right로 기본값, logo_url은 빈 문자열)
-            media_data = {"name": name, "bias": "right", "logo_url": ""}
+            # 없으면 생성 (bias는 center로 기본값, logo_url은 빈 문자열)
+            media_data = {"name": name, "bias": "center", "logo_url": ""}
             result = self.client.table("media_outlets").insert(media_data).execute()
             return {"id": result.data[0]["id"], "bias": result.data[0]["bias"]}
         except Exception as e:

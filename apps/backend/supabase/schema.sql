@@ -29,7 +29,6 @@ CREATE TABLE IF NOT EXISTS articles (
   title TEXT NOT NULL,
   summary_excerpt TEXT,
   url TEXT UNIQUE NOT NULL,
-  bias TEXT CHECK (bias IN ('left', 'center', 'right')) NOT NULL,
   category TEXT,
   published_at TIMESTAMP,
   author TEXT

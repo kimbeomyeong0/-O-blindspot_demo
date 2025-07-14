@@ -16,5 +16,6 @@ def dict_to_article(art: dict) -> Article:
         published_at=published_at,
         author=art.get("author"),
         image_url=art.get("image_url"),
-        bias=art.get("bias", "right")
+        bias=art.get("bias", "right"),
+        media_id=art.get("media_id")
     ) 
