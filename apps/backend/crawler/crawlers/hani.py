@@ -12,9 +12,9 @@ from rich.console import Console
 # Supabase 연동 및 서비스/모델 import
 import sys
 sys.path.append(str(Path(__file__).parent.parent))
-from app.services.article_service import ArticleService
-from app.models.article import Article
-from crawler.base_crawler import BaseNewsCrawler
+from apps.backend.app.services.article_service import ArticleService
+from apps.backend.app.models.article import Article
+from apps.backend.crawler.base import BaseNewsCrawler
 
 class HaniCategory(Enum):
     ECONOMY = "경제"
@@ -263,9 +263,12 @@ class HaniCrawler(BaseNewsCrawler):
     async def save_articles(self, *args, **kwargs):
         return 0
 
+async def main():
+    config = HaniCrawlerConfig()
+    crawler = HaniCrawler(config)
+    await crawler.run()
+
 # 직접 실행 시: 비동기 main 함수
 if __name__ == "__main__":
     import asyncio
-    config = HaniCrawlerConfig()
-    crawler = HaniCrawler(config)
-    asyncio.run(crawler.run()) 
+    asyncio.run(main()) 
