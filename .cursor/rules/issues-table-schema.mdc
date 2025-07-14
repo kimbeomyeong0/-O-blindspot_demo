@@ -1,0 +1,28 @@
+# issues 테이블 스키마 및 필드 설명
+
+Supabase의 `issues` 테이블은 뉴스 클러스터링 결과(이슈 그룹)를 저장하는 테이블입니다. 주요 필드는 다음과 같습니다:
+
+| 컬럼명            | 타입                    | 설명                                      |
+|-------------------|-------------------------|-------------------------------------------|
+| id                | uuid                    | 이슈(클러스터) 고유 식별자                |
+| title             | text                    | 이슈(클러스터) 대표 제목                  |
+| summary           | text                    | 이슈(클러스터) 요약                       |
+| image_url         | text                    | 대표 이미지 URL                           |
+| image_swipe_url   | text                    | 스와이프용 이미지 URL(선택)               |
+| dominant_bias     | text                    | 이슈의 대표적 성향(left/center/right)     |
+| bias_left_pct     | double precision        | 좌성향 기사 비율(%)                       |
+| bias_center_pct   | double precision        | 중립성향 기사 비율(%)                     |
+| bias_right_pct    | double precision        | 우성향 기사 비율(%)                       |
+| source_count      | integer                 | 이슈에 포함된 기사(소스) 개수             |
+| updated_at        | timestamp without time zone | 마지막 업데이트 시각                  |
+
+- bias_xxx_pct 필드는 해당 이슈에 포함된 기사들의 성향 분포를 의미합니다.
+- dominant_bias는 bias_xxx_pct 중 가장 높은 값을 갖는 성향을 나타냅니다.
+- image_url, image_swipe_url은 대표 이미지(썸네일/스와이프용)로 활용됩니다.
+- source_count는 클러스터에 속한 기사 개수입니다.
+
+이 테이블은 클러스터링/이슈 그룹핑 결과를 저장하고, 프론트엔드에서 이슈별 대표 정보 제공에 사용됩니다.
+description:
+globs:
+alwaysApply: false
+---
