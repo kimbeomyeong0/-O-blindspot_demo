@@ -1,76 +1,118 @@
-# blindspot_demo 데이터베이스 스키마
+# 데이터베이스 스키마 가이드
 
-## 테이블 구조
+## 🗄️ 핵심 테이블
 
-### articles 테이블
-- **id**: uuid (기본키)
-- **issue_id**: uuid (issues 테이블 참조)
-- **media_id**: uuid (media_outlets 테이블 참조)
-- **title**: text (기사 제목)
-- **content_full**: text (기사 전체 내용)
-- **url**: text (기사 URL)
-- **category**: text (기사 카테고리)
-- **published_at**: timestamp with time zone (발행일시)
-- **author**: text (작성자)
-- **image_url**: text (이미지 URL)
-- **bias**: text (편향성)
+### issues (이슈 단위)
+```sql
+-- 뉴스 이슈 정보 저장 (카드 피드 핵심)
+CREATE TABLE issues (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,                    -- GPT 생성 제목 (1~2문장)
+    summary TEXT NOT NULL,                  -- GPT 기반 중립적 요약
+    image_url TEXT,                         -- 대표 이미지
+    bias_left_pct DECIMAL(5,2),            -- 좌성향 기사 비율
+    bias_center_pct DECIMAL(5,2),          -- 중성향 기사 비율
+    bias_right_pct DECIMAL(5,2),           -- 우성향 기사 비율
+    dominant_bias TEXT,                     -- 최고 성향값
+    source_count INTEGER DEFAULT 0,         -- 연결된 기사 수
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
 
-### issues 테이블
-- **id**: uuid (기본키)
-- **title**: text (이슈 제목)
-- **summary**: text (이슈 요약)
-- **image_url**: text (이미지 URL)
-- **image_swipe_url**: text (스와이프 이미지 URL)
-- **bias_left_pct**: double precision (좌파 편향 퍼센트)
-- **bias_center_pct**: double precision (중도 편향 퍼센트)
-- **bias_right_pct**: double precision (우파 편향 퍼센트)
-- **dominant_bias**: text (주요 편향성)
-- **source_count**: integer (소스 수)
-- **updated_at**: timestamp without time zone (업데이트 시간)
+### articles (개별 기사)
+```sql
+-- 개별 뉴스 기사 (편향 분석 기본 데이터)
+CREATE TABLE articles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    issue_id UUID REFERENCES issues(id),
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    url TEXT NOT NULL,
+    source TEXT NOT NULL,                   -- 언론사명
+    published_at TIMESTAMP,
+    author TEXT,
+    image_url TEXT,
+    bias_analysis TEXT                      -- 편향 분석 결과
+);
+```
 
-### media_outlets 테이블
-- **id**: uuid (기본키)
-- **name**: text (미디어 이름)
-- **bias**: text (편향성)
-- **logo_url**: text (로고 URL)
+### common_points (공통 팩트)
+```sql
+-- 좌우 언론 공통 팩트 (Key Facts용)
+CREATE TABLE common_points (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    issue_id UUID REFERENCES issues(id),
+    point TEXT NOT NULL                     -- 공통 언급 문장
+);
+```
 
-### bias_summaries 테이블
-- **id**: uuid (기본키)
-- **issue_id**: uuid (issues 테이블 참조)
-- **bias**: text (편향성)
-- **summary_list**: jsonb (요약 리스트)
+### bias_summaries (성향별 요약)
+```sql
+-- 성향별 이슈 요약 (좌/중/우 관점)
+CREATE TABLE bias_summaries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    issue_id UUID REFERENCES issues(id),
+    bias TEXT NOT NULL,                     -- 성향 (left/center/right)
+    summary_list JSONB                      -- bullet 형태 요약
+);
+```
 
-### common_points 테이블
-- **id**: uuid (기본키)
-- **issue_id**: uuid (issues 테이블 참조)
-- **point**: text (공통점)
+## 🔗 테이블 관계
+```
+issues (1) ←→ (N) articles
+    ↓
+    ├── (1:N) common_points
+    ├── (1:N) bias_summaries
+    ├── (1:N) reactions
+    └── (1:N) bookmarks
+```
 
-### bookmarks 테이블
-- **user_id**: uuid (사용자 ID)
-- **issue_id**: uuid (issues 테이블 참조)
-- **created_at**: timestamp without time zone (생성 시간)
+## 📊 데이터 생성 프로세스
 
-### reactions 테이블
-- **id**: uuid (기본키)
-- **issue_id**: uuid (issues 테이블 참조)
-- **likes**: integer (좋아요 수)
-- **comments**: integer (댓글 수)
-- **views**: integer (조회수)
+### 1. 이슈 클러스터링
+- 유사한 기사들을 이슈로 그룹화
+- GPT로 이슈 제목과 요약 생성
+- 편향 비율 계산 (좌/중/우 기사 수 기반)
 
-## 관계
-- articles.issue_id → issues.id
-- articles.media_id → media_outlets.id
-- bias_summaries.issue_id → issues.id
-- common_points.issue_id → issues.id
-- bookmarks.issue_id → issues.id
-- reactions.issue_id → issues.id
+### 2. 공통점 추출
+- 좌우 기사 1~2개씩 샘플링 → GPT로 공통점 추출
+- `common_points` 테이블에 저장
 
-## 주요 특징
-- 모든 테이블이 UUID 기반의 기본키를 사용
-- 대부분의 테이블이 issues 테이블을 참조하는 구조
-- 편향성(bias) 정보가 여러 테이블에 분산되어 있음
-- JSONB 타입을 사용하여 유연한 데이터 구조 지원
-description:
-globs:
-alwaysApply: false
----
+### 3. 성향별 요약 생성
+- 해당 bias 성향 기사 2~3개 샘플링
+- GPT로 해당 성향 시각 요약 → bullet 형태로 저장
+
+## 💾 데이터 저장 규칙
+
+### 깔끔한 저장 코드
+```python
+# ✅ 권장
+async def save_articles(articles: List[Article]):
+    for article in articles:
+        await db.articles.insert(article.dict())
+    print(f"💾 Saved {len(articles)} articles")
+```
+
+### 불필요한 로그 제거
+```python
+# ❌ 피해야 할 방식
+print(f"HTTP Request: POST /api/articles")
+print(f"Database: Inserting article with ID {article_id}")
+```
+
+## 🔍 주요 쿼리 패턴
+
+### 이슈별 기사 조회
+```sql
+SELECT a.*, i.title as issue_title 
+FROM articles a 
+JOIN issues i ON a.issue_id = i.id 
+WHERE i.id = $1;
+```
+
+### 편향별 요약 조회
+```sql
+SELECT bs.* 
+FROM bias_summaries bs 
+WHERE bs.issue_id = $1 AND bs.bias = $2;
+```

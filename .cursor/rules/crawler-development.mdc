@@ -1,113 +1,42 @@
 # 크롤러 개발 가이드라인
 
-## 크롤러 기본 구조
+## 🕷️ 크롤러 구조
+- [base.py](mdc:apps/backend/crawler/base.py): 모든 크롤러의 기본 클래스
+- 언론사별 크롤러: [chosun.py](mdc:apps/backend/crawler/crawlers/chosun.py), [joongang.py](mdc:apps/backend/crawler/crawlers/joongang.py) 등
 
-### BaseCrawler 클래스 상속
-모든 크롤러는 `base.py`의 `BaseCrawler` 클래스를 상속해야 합니다:
+## 📋 개발 규칙
 
-```python
-from apps.backend.crawler.base import BaseCrawler
+### 1. 통합 구조 유지
+- 언론사별 별도 디렉토리 생성 금지
+- 모든 크롤러는 `crawlers/` 디렉토리에 통합
+- 기존 크롤러를 템플릿으로 참조
 
-class MediaCrawler(BaseCrawler):
-    def __init__(self):
-        super().__init__()
-        self.media_name = "media_name"
-        self.base_url = "https://example.com"
-```
+### 2. 일관된 피드백
+- URL 리스트 출력 금지 (너무 많은 URL)
+- 간결하고 명확한 진행 상황 표시
+- 모든 크롤러의 피드백 스타일 통일
 
-### 필수 메서드 구현
-- `crawl_articles()`: 기사 크롤링 메인 로직
-- `parse_article()`: 개별 기사 파싱
-- `get_article_urls()`: 기사 URL 목록 수집
+### 3. 데이터 저장
+- 원시 데이터: `data/raw/` 디렉토리에 JSONL 형식
+- 파일명: `{언론사명}_articles_{날짜}_{시간}.jsonl`
+- 데이터베이스 저장 코드는 깔끔하고 간단하게
+- 불필요한 HTTP 요청 로그 제거
 
-## 데이터 구조
+### 4. HTML 구조 처리
+- 전체 HTML 구조 제공 (CSS 선택자만 사용하지 않음)
+- 명확한 데이터 추출 로직 구현
 
-### 기사 데이터 형식
-```python
-article_data = {
-    "title": "기사 제목",
-    "content": "기사 내용",
-    "url": "기사 URL",
-    "published_at": "2024-01-01T00:00:00Z",
-    "author": "작성자",
-    "category": "카테고리",
-    "image_url": "이미지 URL",
-    "bias": "편향성"
-}
-```
-
-### 저장 형식
-- JSONL 형식으로 저장
-- 파일명: `{media_name}_articles_{date}_{timestamp}.jsonl`
-- UTF-8 인코딩 사용
-
-## 크롤러 개발 모범 사례
-
-### 1. 에러 처리
-```python
-try:
-    # 크롤링 로직
-    pass
-except Exception as e:
-    self.logger.error(f"크롤링 중 오류 발생: {e}")
-    return []
-```
-
-### 2. 요청 간격 조절
-```python
-import time
-time.sleep(1)  # 1초 간격으로 요청
-```
-
-### 3. 로깅
-```python
-self.logger.info(f"{self.media_name} 크롤링 시작")
-self.logger.info(f"총 {len(articles)}개 기사 수집 완료")
-```
-
-### 4. HTML 파싱
-```python
-from bs4 import BeautifulSoup
-
-soup = BeautifulSoup(html_content, 'html.parser')
-title = soup.find('h1').text.strip()
-```
-
-## 기존 크롤러 참고
-
-### 주요 크롤러 파일
-- [apps/backend/crawler/crawlers/chosun.py](mdc:apps/backend/crawler/crawlers/chosun.py): 조선일보 크롤러
-- [apps/backend/crawler/crawlers/joongang.py](mdc:apps/backend/crawler/crawlers/joongang.py): 중앙일보 크롤러
-- [apps/backend/crawler/crawlers/donga.py](mdc:apps/backend/crawler/crawlers/donga.py): 동아일보 크롤러
-
-### 유틸리티 함수
-- [apps/backend/crawler/utils.py](mdc:apps/backend/crawler/utils.py): 공통 유틸리티 함수
-
-## 실행 및 테스트
-
-### 개별 크롤러 실행
+## 🚀 실행 방법
 ```bash
-python3 -m apps.backend.crawler.crawlers.{media_name}
-```
-
-### 전체 크롤러 실행
-```bash
+# 전체 크롤러 실행
 python3 apps/backend/crawler/run_all_crawlers.py
+
+# 개별 크롤러 실행
+python3 apps/backend/crawler/crawlers/{언론사명}.py
 ```
 
-### 디버깅
-- 크롤링 실패 시 HTML 파일 저장
-- 로그 확인: `logs/` 디렉토리
-- 데이터 확인: `data/raw/` 디렉토리
-
-## 주의사항
-
-1. **웹사이트 정책 준수**: robots.txt 확인, 요청 간격 조절
-2. **데이터 품질**: 제목, 내용, URL 필수 포함
-3. **에러 복구**: 네트워크 오류, 파싱 오류 처리
-4. **성능 최적화**: 불필요한 요청 최소화
-5. **코드 재사용**: 기존 크롤러의 공통 패턴 활용
-description:
-globs:
-alwaysApply: false
----
+## 📊 데이터 플로우
+1. 크롤러가 언론사 기사 수집
+2. 원시 데이터를 JSONL 형식으로 저장
+3. 데이터베이스에 정제된 데이터 저장
+4. 편향 분석 및 이슈 클러스터링

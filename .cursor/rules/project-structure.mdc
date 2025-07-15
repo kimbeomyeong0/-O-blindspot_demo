@@ -1,62 +1,34 @@
-# blindspot_demo 프로젝트 구조
+# 프로젝트 구조 가이드
 
-## 프로젝트 개요
-blindspot_demo는 뉴스 미디어의 편향성을 분석하는 플랫폼으로, 크롤러를 통해 뉴스 기사를 수집하고 편향성을 분석하여 사용자에게 제공합니다.
+## 📁 핵심 디렉토리
+- `apps/backend/`: FastAPI 백엔드
+- `apps/frontend/`: React 프론트엔드  
+- `crawler/`: 뉴스 크롤러 시스템
+- `data/raw/`: 크롤링 원시 데이터
 
-## 디렉토리 구조
+## 🗄️ 데이터베이스 핵심 테이블
 
-### apps/backend/
-- **app/**: FastAPI 백엔드 애플리케이션
-  - **api/**: API 엔드포인트
-  - **core/**: 핵심 설정 및 유틸리티
-  - **db/**: 데이터베이스 관련 코드
-  - **models/**: 데이터 모델
-  - **services/**: 비즈니스 로직 서비스
-    - **cluster/**: 클러스터링 관련
-    - **crawler/**: 크롤러 관련
-    - **generator/**: 생성 관련
+### issues (이슈 단위)
+- 뉴스 이슈 정보 저장 (제목, 요약, 편향 비율)
+- 카드 피드 및 상세 페이지 핵심 역할
+- 주요 필드: `title`, `summary`, `image_url`, `bias_left_pct`, `bias_center_pct`, `bias_right_pct`, `dominant_bias`
 
-### apps/backend/crawler/
-- **crawlers/**: 각 미디어별 크롤러 구현
-  - chosun.py, joongang.py, donga.py, hani.py, jtbc.py, kbs.py, khan.py, mbc.py, ohmynews.py, pressian.py, sbs.py, yonhap.py
-- **data/raw/**: 크롤링된 원시 데이터
-- **base.py**: 크롤러 기본 클래스
-- **utils.py**: 크롤러 유틸리티 함수
-- **run_all_crawlers.py**: 모든 크롤러 실행 스크립트
+### articles (개별 기사)
+- 개별 뉴스 기사 정보
+- `issue_id`로 issues 테이블과 연결
+- 편향 분석의 기본 데이터 소스
 
-### apps/frontend/
-- **components/**: React 컴포넌트
-- **features/**: 기능별 모듈
-- **pages/**: 페이지 컴포넌트
-- **types/**: TypeScript 타입 정의
+### common_points (공통 팩트)
+- 좌우 언론이 공통으로 언급한 팩트 문장
+- Key Facts 기능의 데이터 소스
 
-## 크롤러 개발 가이드라인
+### bias_summaries (성향별 요약)
+- 성향별 이슈 요약 (좌/중/우 관점)
+- `bias` 필드로 성향 구분 (left/center/right)
 
-### 크롤러 구조
-- 모든 크롤러는 `base.py`의 기본 클래스를 상속
-- 각 미디어별로 독립적인 크롤러 파일 생성
-- 크롤링 결과는 JSONL 형식으로 저장
-
-### 데이터 저장
-- 크롤링된 데이터는 `data/raw/` 디렉토리에 저장
-- 파일명 형식: `{media_name}_articles_{date}_{timestamp}.jsonl`
-- Supabase를 통해 데이터베이스에 저장
-
-### 크롤러 실행
-- 개별 크롤러: `python3 -m apps.backend.crawler.crawlers.{media_name}`
-- 전체 크롤러: `python3 apps/backend/crawler/run_all_crawlers.py`
-
-## 개발 환경
-- Python 3.x 사용 (`python3`, `pip3` 명령어 사용)
-- Supabase를 데이터베이스로 사용
-- FastAPI 백엔드, React 프론트엔드
-
-## 주요 파일
-- [apps/backend/crawler/base.py](mdc:apps/backend/crawler/base.py): 크롤러 기본 클래스
-- [apps/backend/crawler/run_all_crawlers.py](mdc:apps/backend/crawler/run_all_crawlers.py): 전체 크롤러 실행
-- [apps/backend/app/db/supabase_client.py](mdc:apps/backend/app/db/supabase_client.py): 데이터베이스 클라이언트
-- [apps/backend/app/models/article.py](mdc:apps/backend/app/models/article.py): 기사 모델
-description:
-globs:
-alwaysApply: false
----
+## 🔗 테이블 관계
+- `issues` ← `articles` (1:N)
+- `issues` ← `common_points` (1:N)  
+- `issues` ← `bias_summaries` (1:N)
+- `issues` ← `reactions` (1:N)
+- `issues` ← `bookmarks` (1:N)

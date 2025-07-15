@@ -29,11 +29,13 @@ class ArticleService:
             
             # 기사 데이터 준비 (각 기사의 media_id, bias 사용)
             articles_data = []
+            from rich import print as rprint
             for article in new_articles:
                 article_dict = article.to_dict()
                 # bias가 None/빈값이면 'center'로 강제
                 if not article_dict.get('bias'):
                     article_dict['bias'] = 'center'
+                rprint(f"[cyan]DB insert 직전 published_at: {article_dict.get('published_at')}[/cyan]")
                 articles_data.append(article_dict)
             # 일괄 삽입
             result = self.client.table("articles").insert(articles_data).execute()

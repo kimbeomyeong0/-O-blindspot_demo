@@ -1,0 +1,247 @@
+# 프론트엔드 개발 가이드라인
+
+## 🏗️ 프로젝트 구조
+- `apps/frontend/`: React 애플리케이션
+  - `components/`: 재사용 가능한 컴포넌트
+  - `features/`: 기능별 모듈
+  - `pages/`: 페이지 컴포넌트
+  - `types/`: TypeScript 타입 정의
+  - `lib/`: 유틸리티 함수
+  - `styles/`: 스타일 파일
+
+## 🎨 UI/UX 가이드라인
+
+### 1. 카드 피드 디자인
+- 이슈별 카드 형태로 표시
+- 편향 비율 시각화 (좌/중/우)
+- 대표 이미지 표시
+- 간결한 제목과 요약
+
+### 2. 상세 페이지
+- 이슈 전체 요약
+- 성향별 요약 탭 (좌/중/우)
+- Key Facts 섹션
+- 관련 기사 목록
+
+### 3. 반응형 디자인
+```css
+/* ✅ 권장 */
+.article-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 768px) {
+  .article-card {
+    padding: 0.5rem;
+  }
+}
+```
+
+## 📊 데이터 시각화
+
+### 편향 비율 차트
+```typescript
+// ✅ 권장
+interface BiasChartProps {
+  leftPct: number;
+  centerPct: number;
+  rightPct: number;
+}
+
+export const BiasChart: React.FC<BiasChartProps> = ({ leftPct, centerPct, rightPct }) => {
+  return (
+    <div className="bias-chart">
+      <div className="bias-bar left" style={{ width: `${leftPct}%` }} />
+      <div className="bias-bar center" style={{ width: `${centerPct}%` }} />
+      <div className="bias-bar right" style={{ width: `${rightPct}%` }} />
+    </div>
+  );
+};
+```
+
+### 이슈 카드 컴포넌트
+```typescript
+// ✅ 권장
+interface IssueCardProps {
+  issue: Issue;
+  onCardClick: (id: string) => void;
+}
+
+export const IssueCard: React.FC<IssueCardProps> = ({ issue, onCardClick }) => {
+  return (
+    <div className="issue-card" onClick={() => onCardClick(issue.id)}>
+      <img src={issue.image_url} alt={issue.title} />
+      <h3>{issue.title}</h3>
+      <p>{issue.summary}</p>
+      <BiasChart 
+        leftPct={issue.bias_left_pct}
+        centerPct={issue.bias_center_pct}
+        rightPct={issue.bias_right_pct}
+      />
+    </div>
+  );
+};
+```
+
+## 🔄 상태 관리
+
+### API 호출
+```typescript
+// ✅ 권장
+const useIssues = () => {
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchIssues = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/issues');
+      const data = await response.json();
+      setIssues(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { issues, loading, error, fetchIssues };
+};
+```
+
+### 로컬 상태 관리
+```typescript
+// ✅ 권장
+const useBookmarks = () => {
+  const [bookmarks, setBookmarks] = useState<string[]>([]);
+
+  const toggleBookmark = (issueId: string) => {
+    setBookmarks(prev => 
+      prev.includes(issueId) 
+        ? prev.filter(id => id !== issueId)
+        : [...prev, issueId]
+    );
+  };
+
+  return { bookmarks, toggleBookmark };
+};
+```
+
+## 🎯 사용자 인터랙션
+
+### 북마크 기능
+```typescript
+// ✅ 권장
+const BookmarkButton: React.FC<{ issueId: string; isBookmarked: boolean }> = ({ 
+  issueId, 
+  isBookmarked 
+}) => {
+  const { toggleBookmark } = useBookmarks();
+
+  return (
+    <button 
+      className={`bookmark-btn ${isBookmarked ? 'bookmarked' : ''}`}
+      onClick={() => toggleBookmark(issueId)}
+    >
+      {isBookmarked ? '★' : '☆'}
+    </button>
+  );
+};
+```
+
+### 필터링 기능
+```typescript
+// ✅ 권장
+const useIssueFilters = () => {
+  const [filters, setFilters] = useState({
+    bias: 'all',
+    category: 'all',
+    dateRange: 'all'
+  });
+
+  const filteredIssues = useMemo(() => {
+    return issues.filter(issue => {
+      if (filters.bias !== 'all' && issue.dominant_bias !== filters.bias) {
+        return false;
+      }
+      return true;
+    });
+  }, [issues, filters]);
+
+  return { filters, setFilters, filteredIssues };
+};
+```
+
+## 🎨 스타일링
+
+### CSS 모듈 사용
+```css
+/* ✅ 권장 */
+.issueCard {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+}
+
+.issueCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.biasBar {
+  height: 4px;
+  border-radius: 2px;
+}
+
+.biasBar.left { background: #ff6b6b; }
+.biasBar.center { background: #4ecdc4; }
+.biasBar.right { background: #45b7d1; }
+```
+
+## 🧪 테스트
+
+### 컴포넌트 테스트
+```typescript
+// ✅ 권장
+describe('IssueCard', () => {
+  it('renders issue information correctly', () => {
+    const mockIssue = {
+      id: '1',
+      title: 'Test Issue',
+      summary: 'Test summary',
+      bias_left_pct: 30,
+      bias_center_pct: 40,
+      bias_right_pct: 30
+    };
+
+    render(<IssueCard issue={mockIssue} onCardClick={jest.fn()} />);
+    
+    expect(screen.getByText('Test Issue')).toBeInTheDocument();
+    expect(screen.getByText('Test summary')).toBeInTheDocument();
+  });
+});
+```
+
+### 훅 테스트
+```typescript
+// ✅ 권장
+describe('useIssues', () => {
+  it('fetches issues successfully', async () => {
+    const { result } = renderHook(() => useIssues());
+    
+    await act(async () => {
+      await result.current.fetchIssues();
+    });
+    
+    expect(result.current.issues).toHaveLength(2);
+    expect(result.current.loading).toBe(false);
+  });
+});
+```

@@ -87,9 +87,12 @@ class ArticleExtractor:
         return None
 
     def _parse_datetime(self, date_str: str) -> Optional[datetime]:
-        # 예: 2025.07.14 16:27:45 또는 2025.07.14 16:27:45, 기사입력 2025.07.09. 10:30:53
-        date_str = date_str.replace("기사입력", "").replace(".", "-").replace("  ", " ").strip()
-        date_str = re.sub(r"[^0-9\- :]+", "", date_str)
+        # robust: 한글 접두사, 불필요한 문자, 공백 등 제거
+        if date_str:
+            import re
+            date_str = re.sub(r'^(기사입력|입력|수정|등록)[ :\-]*', '', date_str)
+            date_str = date_str.replace(".", "-").replace("  ", " ").strip()
+            date_str = re.sub(r"[^0-9\- :]+", "", date_str)
         for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"]:
             try:
                 return datetime.strptime(date_str, fmt)
@@ -100,6 +103,7 @@ class ArticleExtractor:
     def parse_article_list(self, html: str) -> List[dict]:
         soup = BeautifulSoup(html, "html.parser")
         articles = []
+        # 카드 HTML 구조에 맞게 셀렉터 점검
         for li in soup.select('div.section.list_arl_group ul.list > li'):
             try:
                 thumb_a = li.select_one('div.thumb a')
@@ -128,6 +132,7 @@ class ArticleExtractor:
                 if not isinstance(img_style, str):
                     img_style = ""
                 image_url = self._parse_img_url(img_style) if img_style else None
+                # robust: byline과 date 추출 개선
                 byline = li.select_one('div.byline')
                 reporter = None
                 date = None
@@ -136,6 +141,10 @@ class ArticleExtractor:
                     date_tag = byline.select_one('p.date')
                     reporter = name_tag.get_text(strip=True) if name_tag else None
                     date = date_tag.get_text(strip=True) if date_tag else None
+                    # rich로 카드별 추출된 날짜 디버깅
+                    from rich.console import Console
+                    console = Console()
+                    console.print(f"[magenta]카드 날짜 추출: {date} ({title[:30]}...)[/magenta]")
                 articles.append({
                     "url": url,
                     "title": title,
@@ -145,7 +154,10 @@ class ArticleExtractor:
                     "author": reporter,
                     "published_at": date
                 })
-            except Exception:
+            except Exception as e:
+                from rich.console import Console
+                console = Console()
+                console.print(f"[red]카드 파싱 오류: {e}[/red]")
                 continue
         return articles
 
@@ -252,6 +264,43 @@ class PressianCrawler(BaseNewsCrawler):
                     await page.wait_for_timeout(self.config.wait_timeout)
                     html = await page.content()
                     detail = self.extractor.parse_article_detail(html)
+                    # 카드에서 받은 published_at 백업 사용
+                    card_published_at = art.get('published_at')
+                    detail_published_at = detail.get('published_at')
+                    from rich.console import Console
+                    console = Console()
+                    console.print(f"[yellow]상세 파싱: 카드={card_published_at}, 상세={detail_published_at} ({art['title'][:30]}...)[/yellow]")
+                    # 상세 날짜를 datetime으로 변환 시도
+                    if detail_published_at:
+                        detail_published_at_dt = self.extractor._parse_datetime(detail_published_at)
+                        if detail_published_at_dt:
+                            detail['published_at'] = detail_published_at_dt
+                            console.print(f"[green]상세 파싱: 상세 날짜 변환 성공 - {detail_published_at_dt} ({art['title'][:30]}...)[/green]")
+                        else:
+                            # 상세 날짜 변환 실패 시 카드 날짜 사용
+                            if card_published_at:
+                                card_published_at_dt = self.extractor._parse_datetime(card_published_at)
+                                if card_published_at_dt:
+                                    detail['published_at'] = card_published_at_dt
+                                    console.print(f"[cyan]상세 파싱: 카드 날짜 백업 사용 - {card_published_at_dt} ({art['title'][:30]}...)[/cyan]")
+                                else:
+                                    detail['published_at'] = None
+                                    console.print(f"[red]상세 파싱: 날짜 변환 실패 - {art['title'][:30]}...)[/red]")
+                            else:
+                                detail['published_at'] = None
+                                console.print(f"[red]상세 파싱: 날짜 없음 - {art['title'][:30]}...)[/red]")
+                    elif card_published_at:
+                        # 상세에 날짜가 없으면 카드 날짜 사용
+                        card_published_at_dt = self.extractor._parse_datetime(card_published_at)
+                        if card_published_at_dt:
+                            detail['published_at'] = card_published_at_dt
+                            console.print(f"[cyan]상세 파싱: 카드 날짜 백업 사용 - {card_published_at_dt} ({art['title'][:30]}...)[/cyan]")
+                        else:
+                            detail['published_at'] = None
+                            console.print(f"[red]상세 파싱: 카드 날짜 변환 실패 - {art['title'][:30]}...)[/red]")
+                    else:
+                        detail['published_at'] = None
+                        console.print(f"[red]상세 파싱: 날짜 없음 - {art['title'][:30]}...)[/red]")
                     merged = {**art, **{k: v for k, v in detail.items() if v}}
                     print_status(f"✔ {art['title'][:40]} ... 성공", "success")
                     return merged
@@ -308,7 +357,11 @@ class PressianCrawler(BaseNewsCrawler):
         filepath = data_dir / filename
         async with aiofiles.open(filepath, 'w', encoding='utf-8') as f:
             for article in articles:
-                await f.write(json.dumps(article, ensure_ascii=False) + '\n')
+                # datetime 객체를 JSON 직렬화 가능한 형태로 변환
+                article_copy = article.copy()
+                if article_copy.get('published_at') and isinstance(article_copy['published_at'], datetime):
+                    article_copy['published_at'] = article_copy['published_at'].isoformat()
+                await f.write(json.dumps(article_copy, ensure_ascii=False) + '\n')
         return str(filepath)
 
     async def save_articles_to_db(self, articles: List[Dict[str, Any]]) -> int:
@@ -320,11 +373,25 @@ class PressianCrawler(BaseNewsCrawler):
             media_info = await self.article_service.get_or_create_media("프레시안")
             art['media_id'] = media_info['id'] if media_info else None
             art['bias'] = media_info['bias'] if media_info else 'center'
-            # published_at datetime 변환
+            # published_at datetime robust 변환 (이미 datetime이면 변환하지 않음)
             if art.get('published_at'):
-                try:
-                    art['published_at'] = self.extractor._parse_datetime(art['published_at'])
-                except Exception:
+                if isinstance(art['published_at'], datetime):
+                    # 이미 datetime 객체이면 그대로 사용
+                    pass
+                elif isinstance(art['published_at'], str):
+                    # 문자열인 경우에만 파싱 시도
+                    try:
+                        parsed_dt = self.extractor._parse_datetime(art['published_at'])
+                        if parsed_dt:
+                            art['published_at'] = parsed_dt
+                        else:
+                            print_status(f"[경고] 날짜 파싱 실패: {art.get('title')} / 원본: {art.get('published_at')}", "fail")
+                            art['published_at'] = None
+                    except Exception:
+                        print_status(f"[경고] 날짜 파싱 예외: {art.get('title')}", "fail")
+                        art['published_at'] = None
+                else:
+                    # 다른 타입인 경우 None으로 설정
                     art['published_at'] = None
         # Article 모델로 변환
         article_objects = [dict_to_article(art) for art in articles]

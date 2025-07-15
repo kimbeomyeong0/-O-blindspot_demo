@@ -1,0 +1,152 @@
+# 백엔드 개발 가이드라인
+
+## 🏗️ 프로젝트 구조
+- `apps/backend/app/`: FastAPI 애플리케이션
+  - `api/`: API 엔드포인트
+  - `core/`: 핵심 설정 및 유틸리티
+  - `db/`: 데이터베이스 연결 및 클라이언트
+  - `models/`: 데이터 모델 정의
+  - `services/`: 비즈니스 로직 서비스
+
+### 서비스 레이어
+- `services/`: 비즈니스 로직 분리
+  - `article_service.py`: 기사 관련 서비스
+  - `crawler/`: 크롤러 관련 서비스
+  - `cluster/`: 클러스터링 서비스
+  - `generator/`: 콘텐츠 생성 서비스
+
+## 🗄️ 데이터베이스 연결
+- [supabase_client.py](mdc:apps/backend/app/db/supabase_client.py): Supabase 연결 설정
+- [article.py](mdc:apps/backend/app/models/article.py): 기사 모델
+- Pydantic을 사용한 데이터 검증
+
+## 🔧 개발 환경
+- `python3` 사용 (python 대신)
+- `pip3` 사용 (pip 대신)
+- [requirements.txt](mdc:apps/backend/requirements.txt): 프로젝트 의존성
+
+## 📝 코딩 스타일
+
+### 1. 비동기 처리
+```python
+# ✅ 권장
+async def get_articles(issue_id: str):
+    articles = await db.articles.select().eq("issue_id", issue_id)
+    return articles
+```
+
+### 2. 에러 처리
+```python
+# ✅ 권장
+async def save_article(article_data: dict):
+    try:
+        result = await db.articles.insert(article_data)
+        return result
+    except Exception as e:
+        logger.error(f"Failed to save article: {e}")
+        raise
+```
+
+### 3. 데이터 검증
+```python
+# ✅ 권장
+from pydantic import BaseModel
+
+class ArticleCreate(BaseModel):
+    title: str
+    content: str
+    url: str
+    source: str
+```
+
+## 🚀 API 개발
+
+### 엔드포인트 구조
+```python
+# ✅ 권장
+@router.get("/issues/{issue_id}/articles")
+async def get_issue_articles(issue_id: str):
+    articles = await article_service.get_articles_by_issue(issue_id)
+    return {"articles": articles}
+```
+
+### 서비스 레이어 사용
+```python
+# ✅ 권장
+@router.post("/articles")
+async def create_article(article: ArticleCreate):
+    result = await article_service.create_article(article)
+    return result
+```
+
+## 📊 데이터 처리
+
+### 기사 저장
+```python
+# ✅ 권장
+async def save_articles(articles: List[dict]):
+    for article in articles:
+        await db.articles.insert(article)
+    print(f"💾 Saved {len(articles)} articles")
+```
+
+### 이슈 생성
+```python
+# ✅ 권장
+async def create_issue(issue_data: dict):
+    issue = await db.issues.insert(issue_data)
+    return issue
+```
+
+### 편향 분석
+```python
+# ✅ 권장
+async def analyze_bias(articles: List[dict]):
+    bias_counts = {"left": 0, "center": 0, "right": 0}
+    for article in articles:
+        bias = determine_bias(article)
+        bias_counts[bias] += 1
+    return bias_counts
+```
+
+## 🔍 로깅 및 디버깅
+
+### 로깅 규칙
+```python
+# ✅ 권장
+import logging
+logger = logging.getLogger(__name__)
+
+async def process_articles():
+    logger.info("Starting article processing")
+    # 처리 로직
+    logger.info("Article processing completed")
+```
+
+### 디버깅
+```python
+# ✅ 권장
+async def debug_article(article_id: str):
+    article = await db.articles.select().eq("id", article_id).single()
+    print(f"🔍 Debugging article: {article['title']}")
+    return article
+```
+
+## 🧪 테스트
+
+### 단위 테스트
+```python
+# ✅ 권장
+async def test_article_service():
+    article_data = {"title": "Test", "content": "Test content"}
+    result = await article_service.create_article(article_data)
+    assert result["title"] == "Test"
+```
+
+### 통합 테스트
+```python
+# ✅ 권장
+async def test_api_endpoint():
+    response = await client.get("/api/articles")
+    assert response.status_code == 200
+```
